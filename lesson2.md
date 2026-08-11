@@ -89,5 +89,54 @@ server {
       service:
         name: nginx
         state: restarted
-<img width="468" height="277" alt="image" src="https://github.com/user-attachments/assets/26c63644-43a6-4569-9265-c1bf3306b21c" />
+
+**Practical Lab — Multi-OS Web Configurator** 
+
+1. Create templates/index.html.j2:
+HTML
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ site_title | default('Default Server Title') }}</title>
+</head>
+<body>
+    <h1>Server Information Card</h1>
+    <ul>
+        <li><strong>Hostname:</strong> {{ ansible_hostname }}</li>
+        <li><strong>OS:</strong> {{ ansible_distribution }} {{ ansible_distribution_version }}</li>
+        <li><strong>IP Address:</strong> {{ ansible_default_ipv4.address }}</li>
+        <li><strong>Total Memory:</strong> {{ ansible_memtotal_mb }} MB</li>
+        <li><strong>Core Count:</strong> {{ ansible_processor_vcpus }}</li>
+    </ul>
+
+    <h3>Active Services:</h3>
+    <ul>
+    {% for service in active_services %}
+        <li>{{ service }}</li>
+    {% endfor %}
+    </ul>
+</body>
+</html>
+
+2. Define group_vars/webservers.yml:
+YAML
+site_title: "Automated DevOps Node"
+active_services:
+  - Nginx Web Server
+  - Firewall Security Module
+  - System Telemetry Collector
+  
+3. Write and run deploy_custom_site.yml
+
+src: templates/index.html.j2
+dest: /var/www/html/index.html
+mode: '0644'
+
+
+docker exec node1 cat /var/www/html/index.html
+
+
+
+
+
 

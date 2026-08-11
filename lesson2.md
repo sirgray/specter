@@ -1,1 +1,42 @@
-# specter
+**setup_webserver.yml**
+
+- name: Deploy Configurable Web Server
+  hosts: webservers
+  become: true
+
+  # 1. DEFINE YOUR VARIABLES HERE
+  vars:
+    web_port: 80
+    site_title: "Welcome to DevOps Class"
+    app_dir: "/var/www/html"
+
+  tasks:
+    - name: Ensure Nginx is installed
+      apt:
+        name: nginx
+        state: present
+        update_cache: yes
+
+    - name: Create index.html using variables
+      copy:
+        # Reference variables with {{ double_braces }}
+        content: "<h1>{{ site_title }}</h1><p>Running on port {{ web_port }}</p>"
+        dest: "{{ app_dir }}/index.html"
+        mode: '0644'
+
+
+     ** Add a Nginx configuration template change and a Handler to the playbook:**
+YAML
+    - name: Update custom Nginx config file
+      copy:
+        content: "server { listen {{ web_port }}; root {{ app_dir }}; }"
+        dest: /etc/nginx/conf.d/custom.conf
+      # 'notify' triggers the handler ONLY if this file is modified or created
+      notify: Restart Nginx
+
+  # HANDLERS SECTION (Runs at the very end of the play)
+  handlers:
+    - name: Restart Nginx
+      service:
+        name: nginx
+        state: restarted

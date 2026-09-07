@@ -58,5 +58,5 @@ cat > playbook.yml << 'EOF'
 EOF
 bash
 ansible-playbook -i inventory.ini playbook.yml
-<img width="468" height="639" alt="image" src="https://github.com/user-attachments/assets/5d176972-0952-4c9a-aec5-d210efdba1fd" />
+
 

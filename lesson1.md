@@ -62,5 +62,12 @@ ansible-playbook -i inventory.ini playbook.yml
 bash
 docker exec node2 cat /var/www/html/index.html
 
+bash
+docker rm -f node1
+docker run -d --name node1 --privileged --cgroupns=host \
+  -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
+  -p 8081:80 \
+  geerlingguy/docker-ubuntu2004-ansible:latest
+
 
 

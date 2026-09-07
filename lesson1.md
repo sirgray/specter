@@ -59,4 +59,8 @@ EOF
 bash
 ansible-playbook -i inventory.ini playbook.yml
 
+bash
+docker exec node2 cat /var/www/html/index.html
+
+
 

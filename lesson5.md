@@ -137,4 +137,24 @@ ansible-playbook -i inventory.ini site.yml
 
 
 EOF
-<img width="468" height="578" alt="image" src="https://github.com/user-attachments/assets/c8906dc3-9cdc-4ba2-959d-ec3ba51465da" />
+
+
+********************
+VERIFY TEST_LAB
+********************
+# 1. Verify file permissions and git safety
+ls -la .vault_pass | grep "-rw-------"
+grep -q ".vault_pass" .gitignore
+
+# 2. Test Vault decryption without manual prompts
+ansible-vault view group_vars/production/vault.yml --vault-password-file .vault_pass
+
+# 3. Test maintenance logic
+ansible-playbook -i inventory.ini maintenance_check.yml --vault-password-file .vault_pass
+
+# 4. Test master zero-downtime deployment
+ansible-playbook -i inventory.ini site_deploy.yml --vault-password-file .vault_pass
+
+# 5. Idempotency test (Re-run master deployment)
+# Output should show 0 failed tasks and 0 unexpected changes.
+ansible-playbook -i inventory.ini site_deploy.yml --vault-password-file .vault_pass

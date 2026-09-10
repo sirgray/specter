@@ -95,3 +95,73 @@ cat > site.yml << 'EOF'
 EOF
 
 --> RUN (site.yml)
+
+
+*********************************************
+
+
+templates/index.html.j2
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ site_title | default('Default Server Title') }}</title>
+</head>
+<body>
+    <h1>Server Information Card</h1>
+    <ul>
+        <li><strong>Hostname:</strong> {{ ansible_hostname }}</li>
+        <li><strong>OS:</strong> {{ ansible_distribution }} {{ ansible_distribution_version }}</li>
+        <li><strong>IP Address:</strong> {{ ansible_default_ipv4.address }}</li>
+        <li><strong>Total Memory:</strong> {{ ansible_memtotal_mb }} MB</li>
+        <li><strong>Core Count:</strong> {{ ansible_processor_vcpus }}</li>
+    </ul>
+
+    <h3>Active Services:</h3>
+    <ul>
+    {% for service in active_services %}
+        <li>{{ service }}</li>
+    {% endfor %}
+    </ul>
+</body>
+</html>
+
+
+group_vars/webservers.yml
+
+site_title: "Automated DevOps Node"
+active_services:
+  - Nginx Web Server
+  - Firewall Security Module
+  - System Telemetry Collector
+
+deploy_custom_site.yml
+
+---
+- name: Deploy Dynamic System Info Website
+  hosts: webservers
+  become: true
+
+  tasks:
+    - name: Ensure web package is installed
+      package:
+        name: nginx
+        state: present
+
+    - name: Generate dynamic HTML landing page
+      template:
+        src: templates/index.html.j2
+        dest: /var/www/html/index.html
+        mode: '0644'
+
+    - name: Ensure web server is running
+      service:
+        name: nginx
+        state: started
+        enabled: yes
+
+
+
+
+
+

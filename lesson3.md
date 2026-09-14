@@ -216,7 +216,7 @@ cat > error_handling.yml << 'EOF'
         msg: "Root disk usage is currently at {{ disk_usage.stdout }}%"
 EOF
 
-**$$$ - create this yml to send alert (msg) ONLY disk usage < 35% and another alert (msg) if memory usage > 60%. $$$**
+**$$$ - create this yml to send alert (msg) ONLY disk usage < 35% and another alert (msg) if memory usage > 60%. $$$** - USE THESE 2 conditions in ONE "WHEN" clause
 
 
 

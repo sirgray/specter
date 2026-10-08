@@ -220,6 +220,188 @@ ansible-playbook ci_pipeline.yml --check --diff
 ansible-playbook ci_pipeline.yml
 
 
+*************************************************
+
+cat > rolling_update_deploy.yml << 'EOF'
+- name: Zero-Downtime Rolling Application Upgrade
+  hosts: localhost
+  connection: local
+  serial: 1
+  max_fail_percentage: 30
+
+  tasks:
+    - name: PRE-TASK - Remove host from load balancer pool
+      file:
+        path: /tmp/lb_drain_node.flag
+        state: touch
+        mode: '0644'
+
+    - name: UPGRADE - Deploy new application version
+      copy:
+        dest: /tmp/app_version.txt
+        content: "VERSION=2.5.0\n"
+        mode: '0644'
+
+    - name: POST-TASK - Health check newly updated node
+      uri:
+        url: "https://httpbin.org/get"
+        status_code: 200
+      register: health_check
+      until: health_check.status == 200
+      retries: 3
+      delay: 1
+
+    - name: POST-TASK - Re-add host to load balancer pool
+      file:
+        path: /tmp/lb_drain_node.flag
+        state: absent
+EOF
+
+
+ansible-playbook rolling_update_deploy.yml
+
+*************************************************
+
+cat > inventory_plugins/secure_api_inventory.py << 'EOF'
+#!/usr/bin/python
+
+from ansible.plugins.inventory import BaseInventoryPlugin
+from ansible.errors import AnsibleError
+import json
+import urllib.request
+
+DOCUMENTATION = r'''
+    name: secure_api_inventory
+    plugin_type: inventory
+    short_description: Vault-authenticated dynamic inventory plugin
+    options:
+        plugin:
+            description: Name of the plugin.
+            required: true
+            choices: ['secure_api_inventory']
+        api_token:
+            description: Secret token for API authentication.
+            required: true
+'''
+
+class InventoryModule(BaseInventoryPlugin):
+    NAME = 'secure_api_inventory'
+
+    def verify_file(self, path):
+        valid = super(InventoryModule, self).verify_file(path)
+        return valid and path.endswith(('secure_cloud.yml', 'secure_cloud.yaml'))
+
+    def parse(self, inventory, loader, path, cache=True):
+        super(InventoryModule, self).parse(inventory, loader, path)
+        self._read_config_data(path)
+
+        token = self.get_option('api_token')
+
+        if not token or token == "UNSET":
+            raise AnsibleError("API Token is missing or invalid!")
+
+        self.inventory.add_group('secure_nodes')
+        hostname = "secure_app_node"
+        self.inventory.add_host(host=hostname, group='secure_nodes')
+        self.inventory.set_variable(hostname, 'ansible_host', '127.0.0.1')
+        self.inventory.set_variable(hostname, 'ansible_connection', 'local')
+        self.inventory.set_variable(hostname, 'authenticated_status', 'SUCCESS')
+EOF
+
+Bash
+cat > secure_cloud.yml << 'EOF'
+plugin: secure_api_inventory
+api_token: "SecretVaultToken999"
+EOF
+
+cat > test_secure_inventory.yml << 'EOF'
+- name: Verify Secure Authenticated Dynamic Inventory
+  hosts: secure_nodes
+  gather_facts: false
+
+  tasks:
+    - name: Display authentication status
+      debug:
+        msg: "Host {{ inventory_hostname }} successfully authenticated with status: {{ authenticated_status }}"
+EOF
+
+
+ansible-playbook -i secure_cloud.yml test_secure_inventory.yml
+
+**************************************************************
+
+
+cat > site_orchestrator.yml << 'EOF'
+- name: Master Deployment Orchestrator - Quality Gate Check
+  hosts: localhost
+  connection: local
+
+  tasks:
+    - name: Gate 1 - Check configuration file presence
+      file:
+        path: /tmp/production_app.conf
+        state: touch
+        mode: '0644'
+
+    - name: Gate 2 - Verify security sandboxing parameters
+      copy:
+        dest: /tmp/production_app.conf
+        content: |
+          ENABLE_SECURITY_SANDBOX=TRUE
+          ALLOWED_SUBNET=10.0.0.0/8
+        mode: '0644'
+
+    - name: Gate 3 - Read back configuration file
+      command: cat /tmp/production_app.conf
+      register: conf_out
+      changed_when: false
+
+    - name: Gate 4 - Assert security flags are present
+      assert:
+        that:
+          - "'ENABLE_SECURITY_SANDBOX=TRUE' in conf_out.stdout"
+        fail_msg: "Orchestration Aborted: Security flags missing from configuration."
+        success_msg: "Orchestration Quality Gate Passed: All security conditions satisfied."
+EOF
+
+# 1. Run static lint check
+sudo apt update && sudo apt install -y ansible-lint
+
+ansible-lint site_orchestrator.yml  (get rid of FQCN errors)
+
+
+
+# 2. Run dry-run simulation
+ansible-playbook site_orchestrator.yml --check --diff
+
+check why the error happened and fix 
+
+# 3. Execute production deployment
+ansible-playbook site_orchestrator.yml
+
+
+*****************************************************
+
+
+Create a playbook named micro_gate.yml that performs the following 4 tasks:
+
+Session 1 & 5 (Dynamic Node & Vault Token Check):
+Declare a playbook variable vault_api_token: "SecretToken123". Add a task to assert that vault_api_token is defined and non-empty.
+
+Session 2 (Webhook Payload Event Log):
+Simulate receiving a critical webhook alert by logging a debug message formatted as: "[ALERT RECEIVED] Service nginx experienced CRITICAL status."
+
+Session 3 (CI/CD Pipeline Compatibility):
+Add a task using ansible.builtin.copy to deploy a dummy config to /tmp/micro_app.conf with mode: '0644'. Ensure all tasks use Fully Qualified Collection Names (ansible.builtin.*).
+
+Session 4 (Rolling Health Probe):
+Add a task using ansible.builtin.uri to probe [https://httpbin.org/get](https://httpbin.org/get), setting until: health_check.status == 200, retries: 2, and delay: 1.
+
+
+
+
+
+
 
 
 

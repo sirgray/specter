@@ -200,6 +200,159 @@ cat /tmp/k8s_deployment.yml
 ***************************************************
 
 
+cat > secret_rotation.yml << 'EOF'
+- name: Zero-Downtime Kubernetes Secret Rotation
+  hosts: localhost
+  connection: local
+
+  vars:
+    db_password_raw: "SuperSecretDBPass2026!"
+
+  tasks:
+    - name: Encode database password to Base64
+      ansible.builtin.set_fact:
+        db_password_b64: "{{ db_password_raw | b64encode }}"
+
+    - name: Deploy Kubernetes Secret manifest
+      ansible.builtin.copy:
+        dest: /tmp/k8s_secret.yml
+        content: |
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: db-credentials
+            namespace: production-apps
+          type: Opaque
+          data:
+            DB_PASSWORD: {{ db_password_b64 }}
+        mode: '0600'
+
+    - name: Audit generated secret file permissions
+      ansible.builtin.stat:
+        path: /tmp/k8s_secret.yml
+      register: secret_stat
+
+    - name: Assert secret file is locked to root read-write (0600)
+      ansible.builtin.assert:
+        that:
+          - secret_stat.stat.mode == '0600'
+        fail_msg: "SECURITY VIOLATION: Secret file permissions are too permissive!"
+        success_msg: "SECURITY PASSED: Secret file correctly restricted to owner read-write."
+EOF
+
+
+
+ansible-playbook -i "localhost," secret_rotation.yml
+
+***************************************
+
+cat > library/k8s_pod_health.py << 'EOF'
+#!/usr/bin/python
+
+from ansible.module_utils.basic import AnsibleModule
+
+def run_module():
+    module_args = dict(
+        pod_name=dict(type='str', required=True),
+        running_phase=dict(type='str', default='Running'),
+        restart_count=dict(type='int', default=0)
+    )
+
+    result = dict(
+        changed=False,
+        healthy=False,
+        pod_name=""
+    )
+
+    module = AnsibleModule(
+        argument_spec=module_args,
+        supports_check_mode=True
+    )
+
+    pod_name = module.params['pod_name']
+    phase = module.params['running_phase']
+    restarts = module.params['restart_count']
+
+    result['pod_name'] = pod_name
+
+    # Evaluate pod health logic
+    if phase != 'Running':
+        module.fail_json(
+            msg=f"Pod '{pod_name}' is unready! Current status phase is '{phase}'.",
+            **result
+        )
+
+    if restarts > 5:
+        module.fail_json(
+            msg=f"Pod '{pod_name}' is unstable! Restart count ({restarts}) exceeds threshold.",
+            **result
+        )
+
+    result['healthy'] = True
+    module.exit_json(**result)
+
+def main():
+    run_module()
+
+if __name__ == '__main__':
+    main()
+EOF
+
+
+cat > test_pod_health.yml << 'EOF'
+- name: Verify Custom Kubernetes Pod Health Module
+  hosts: localhost
+  connection: local
+
+  tasks:
+    - name: Run health check on active web API pod
+      k8s_pod_health:
+        pod_name: "web-api-pod-01"
+        running_phase: "Running"
+        restart_count: 1
+      register: health_out
+
+    - name: Display health result
+      ansible.builtin.debug:
+        msg: "Pod {{ health_out.pod_name }} Health State: {{ health_out.healthy }}"
+EOF
+
+
+ansible-playbook -i "localhost," test_pod_health.yml
+
+
+*******************************************************
+
+
+
+Task 1: Build a Custom Action Plugin to Audit Local Disk Space
+
+•	Objective: Practice writing control-node action plugins using ActionBase.
+•	Instructions:
+1.	Inside action_plugins/, create disk_audit.py.
+2.	Implement an action plugin that checks if the control node has at least 1GB of free space in /tmp.
+3.	Write test_disk_action.yml to call your action plugin and output a debug message.
+
+
+Task 2: Build a Kubernetes Ingress Manifest Template
+
+•	Objective: Master declarative K8s manifest templating.
+•	Instructions:
+1.	Create a playbook deploy_ingress.yml with variables domain_name: "api.example.com" and service_port: 8080.
+2.	Write a task that uses ansible.builtin.copy to deploy a Kubernetes Ingress YAML manifest to /tmp/k8s_ingress.yml.
+3.	Use ansible.builtin.command: cat /tmp/k8s_ingress.yml and assert to verify api.example.com is present in the rendered file.
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

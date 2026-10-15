@@ -140,6 +140,130 @@ EOF
 ansible-playbook -i "localhost," mesh_policy_deploy.yml
 
 
+**************************************
+
+
+cat > ebpf_probe_deploy.yml << 'EOF'
+- name: eBPF Kernel Telemetry Probe Deployment
+  hosts: localhost
+  connection: local
+
+  vars:
+    target_interface: "eth0"
+    probe_sampling_rate: 1000
+
+  tasks:
+    - name: Stage 1 - Generate eBPF socket monitoring spec
+      ansible.builtin.copy:
+        dest: /tmp/ebpf_probe_config.json
+        content: |
+          {
+            "interface": "{{ target_interface }}",
+            "sampling_rate_hz": {{ probe_sampling_rate }},
+            "trace_points": [
+              "sys_enter_connect",
+              "sys_exit_connect"
+            ],
+            "status": "ATTACHED"
+          }
+        mode: '0644'
+
+    - name: Stage 2 - Read active probe spec
+      ansible.builtin.slurp:
+        src: /tmp/ebpf_probe_config.json
+      register: raw_probe_data
+
+    - name: Stage 3 - Extract eBPF probe variables
+      ansible.builtin.set_fact:
+        probe_spec: "{{ raw_probe_data.content | b64decode | from_json }}"
+
+    - name: Stage 4 - Assert probe attached to kernel interface
+      ansible.builtin.assert:
+        that:
+          - probe_spec.interface == "eth0"
+          - probe_spec.status == "ATTACHED"
+        fail_msg: "eBPF Probe Failure: Kernel telemetry probe not attached."
+        success_msg: "eBPF Probe Passed: Kernel socket probes active on eth0."
+EOF
+
+ansible-playbook -i "localhost," ebpf_probe_deploy.yml
+
+********************************************
+
+cat > canary_traffic_shift.yml << 'EOF'
+- name: Automated Canary Weight Shifting & Circuit Breaking
+  hosts: localhost
+  connection: local
+
+  vars:
+    v1_weight: 80
+    v2_weight: 20
+
+  tasks:
+    - name: Apply 80/20 canary traffic split configuration
+      ansible.builtin.copy:
+        dest: /tmp/canary_route.json
+        content: |
+          {
+            "service": "checkout-api",
+            "subsets": {
+              "v1": {{ v1_weight }},
+              "v2": {{ v2_weight }}
+            },
+            "circuit_breaker": {
+              "consecutive_5xx_errors": 3,
+              "ejection_time_seconds": 30
+            }
+          }
+        mode: '0644'
+
+    - name: Read active canary routing state
+      ansible.builtin.slurp:
+        src: /tmp/canary_route.json
+      register: canary_raw
+
+    - name: Parse active canary configuration
+      ansible.builtin.set_fact:
+        canary_data: "{{ canary_raw.content | b64decode | from_json }}"
+
+    - name: Assert sum of canary weights equals 100 percent
+      ansible.builtin.assert:
+        that:
+          - (canary_data.subsets.v1 + canary_data.subsets.v2) == 100
+        fail_msg: "Canary Rollout Aborted: Traffic routing weights do not sum to 100%!"
+        success_msg: "Canary Rollout Passed: Valid 80/20 traffic weight allocation."
+EOF
+
+
+ansible-playbook -i "localhost," canary_traffic_shift.yml
+
+******************************************************
+
+
+Task 1: Build a Custom Connection Plugin Execution Counter
+
+•	Objective: Practice extending ConnectionBase.
+•	Instructions:
+1.	Create connection_plugins/counter_exec.py.
+2.	Modify exec_command to print "COMMAND_COUNT_LOGGED" to standard error before executing commands.
+3.	Write test_counter.yml using connection: counter_exec to verify output.
+
+
+
+
+Task 2: Build a Strict Mesh AccessPolicy Manifest
+
+•	Objective: Practice declarative mesh policy generation.
+•	Instructions:
+1.	Create a playbook mesh_access_policy.yml.
+2.	Render a YAML file to /tmp/mesh_authz.yml defining an Istio AuthorizationPolicy that allows HTTP GET requests only to path /healthz.
+3.	Assert using ansible.builtin.command and assert that path: /healthz is present in the rendered file.
+
+
+
+
+
+
 
 
 
